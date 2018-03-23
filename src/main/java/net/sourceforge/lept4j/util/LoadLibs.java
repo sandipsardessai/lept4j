@@ -57,14 +57,19 @@ public class LoadLibs {
 
     static {
         System.setProperty("jna.encoding", "UTF8");
+        String userCustomizedPath = System.getProperty(JNA_LIBRARY_PATH);
         File targetTempFolder = extractNativeResources(Platform.RESOURCE_PREFIX);
         if (targetTempFolder != null && targetTempFolder.exists()) {
-            String userCustomizedPath = System.getProperty(JNA_LIBRARY_PATH);
             if (null == userCustomizedPath || userCustomizedPath.isEmpty()) {
                 System.setProperty(JNA_LIBRARY_PATH, targetTempFolder.getPath());
             } else {
                 System.setProperty(JNA_LIBRARY_PATH, userCustomizedPath + File.pathSeparator + targetTempFolder.getPath());
             }
+            logger.log(Level.INFO, "Leptonica: Bundled library for "  + Platform.RESOURCE_PREFIX + " copied to "
+                    + targetTempFolder.getPath() + " which was added to jna.library.path.");
+        } else {
+            logger.log(Level.INFO, "Leptonica: No bundled system library found, expecting it to be in default system library location"
+                    + (userCustomizedPath==null ? "" : " or " + userCustomizedPath) + '.');
         }
     }
 
@@ -75,7 +80,13 @@ public class LoadLibs {
      * <code>Native.loadLibrary()</code>.
      */
     public static Leptonica getLeptonicaInstance() {
-        return (Leptonica) Native.loadLibrary(getLeptonicaLibName(), Leptonica.class);
+        final Leptonica leptonica = (Leptonica) Native.loadLibrary(getLeptonicaLibName(), Leptonica.class);
+        if (leptonica==null || leptonica.getLeptonicaVersion()==null) {
+            logger.log(Level.WARNING, "Leptonica: error accessing library.");
+        } else {
+            logger.log(Level.INFO, "Leptonica loaded in version " + leptonica.getLeptonicaVersion().getString(0));
+        }
+        return leptonica;
     }
 
     /**
@@ -95,10 +106,8 @@ public class LoadLibs {
      * @return target location
      */
     public static File extractNativeResources(String dirname) {
-        File targetTempDir = null;
-
         try {
-            targetTempDir = new File(LEPT4J_TEMP_DIR, dirname);
+            File targetTempDir = new File(LEPT4J_TEMP_DIR, dirname);
 
             URL leptResourceUrl = LoadLibs.class.getResource(dirname.startsWith("/") ? dirname : "/" + dirname);
             if (leptResourceUrl == null) {
@@ -111,15 +120,21 @@ public class LoadLibs {
              * Either load from resources from jar or project resource folder.
              */
             if (urlConnection instanceof JarURLConnection) {
-                copyJarResourceToDirectory((JarURLConnection) urlConnection, targetTempDir);
+                return copyJarResourceToDirectory((JarURLConnection) urlConnection, targetTempDir) ? targetTempDir : null;
             } else {
-                FileUtils.copyDirectory(new File(leptResourceUrl.getPath()), targetTempDir);
+                File libDir = new File(leptResourceUrl.getPath());
+                if (libDir.exists() && libDir.isDirectory()) {
+                    FileUtils.copyDirectory(new File(leptResourceUrl.getPath()), targetTempDir);
+                    return targetTempDir;
+                } else {
+                    return null;
+                }
             }
         } catch (Exception e) {
             logger.log(Level.WARNING, e.getMessage(), e);
         }
 
-        return targetTempDir;
+        return null;
     }
 
     /**
@@ -129,7 +144,8 @@ public class LoadLibs {
      * @param jarConnection
      * @param destDir
      */
-    static void copyJarResourceToDirectory(JarURLConnection jarConnection, File destDir) {
+    static boolean copyJarResourceToDirectory(JarURLConnection jarConnection, File destDir) {
+        boolean foundResources = false;
         try {
             JarFile jarFile = jarConnection.getJarFile();
             String jarConnectionEntryName = jarConnection.getEntryName() + "/";
@@ -147,6 +163,7 @@ public class LoadLibs {
                 if (jarEntryName.startsWith(jarConnectionEntryName)) {
                     String filename = jarEntryName.substring(jarConnectionEntryName.length());
                     File targetFile = new File(destDir, filename);
+                    foundResources = true;
 
                     if (jarEntry.isDirectory()) {
                         targetFile.mkdirs();
@@ -163,5 +180,6 @@ public class LoadLibs {
         } catch (IOException e) {
             logger.log(Level.WARNING, e.getMessage(), e);
         }
+        return foundResources;
     }
 }
