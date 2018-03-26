@@ -36,6 +36,7 @@ import net.sourceforge.lept4j.util.LoadLibs;
  */
 public interface Leptonica extends Library, ILeptonica {
 
+    public static final String BINDINGS_VERSION = "1.75.3";
     public static final Leptonica INSTANCE = LoadLibs.getLeptonicaInstance();
 
     /**

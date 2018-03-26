@@ -81,10 +81,14 @@ public class LoadLibs {
      */
     public static Leptonica getLeptonicaInstance() {
         final Leptonica leptonica = (Leptonica) Native.loadLibrary(getLeptonicaLibName(), Leptonica.class);
-        if (leptonica==null || leptonica.getLeptonicaVersion()==null) {
+        final String leptVersion = leptonica==null ? null : leptonica.getLeptonicaVersion().getString(0);
+        if (leptVersion==null) {
             logger.log(Level.WARNING, "Leptonica: error accessing library.");
         } else {
-            logger.log(Level.INFO, "Leptonica loaded in version " + leptonica.getLeptonicaVersion().getString(0));
+            logger.log(Level.INFO, "Leptonica loaded in version " + leptVersion);
+            if (!leptVersion.contains(Leptonica.BINDINGS_VERSION)) {
+                logger.warning("Leptonica: VERSION MISMATCH: system library version does not match bindings version " + Leptonica.BINDINGS_VERSION);
+            }
         }
         return leptonica;
     }
